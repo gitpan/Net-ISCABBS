@@ -1,11 +1,10 @@
 package Net::ISCABBS;
-$VERSION = 0.5;
+$VERSION = 0.51;
 require IO::Socket::INET;
-use Carp;
 use strict;
 use warnings;
 
-# Subversion ID $Id: ISCABBS.pm 35 2004-10-31 19:43:14Z minter $
+# Subversion ID $Id: ISCABBS.pm 40 2004-12-03 22:26:34Z minter $
 
 sub new
 {
@@ -23,11 +22,10 @@ sub new
         Proto    => "tcp",
         Type     => IO::Socket::INET::SOCK_STREAM()
       )
-      or croak "Cannot connect to $host:$port: $!\n";
+      or return 0;
 
     my $welcome = <$socket>;
-    croak "Server returned weird status: $welcome\n"
-      unless ( $welcome =~ /^2/ );
+    return 0 unless ( $welcome =~ /^2/ );
 
     if ( $login && $password )
     {
@@ -39,7 +37,7 @@ sub new
         }
         else
         {
-            croak "Could not log in.  Server returned $answer\n";
+            return 0;
         }
     }
 
@@ -235,7 +233,7 @@ sub set_firstunread
 {
     my $self      = shift;
     my $socket    = $self->{_socket};
-    my $messageid = shift or croak;
+    my $messageid = shift or return 0;
 
     if (   ( $messageid >= $self->{_firstnote} )
         && ( $messageid <= $self->{_lastnote} ) )
@@ -302,7 +300,7 @@ sub logout
 {
     my $socket = $_[0]->{_socket};
     print $socket "QUIT\n";
-    $socket->close() or croak "Could not close socket\n";
+    $socket->close() or return 0;
 }
 
 1;
@@ -319,11 +317,11 @@ Net::ISCABBS - Perl interface to the ISCABBS system
 
   # Create a new BBS object by logging in with your account
   # If you leave off the login and password, you'll log in with
-  # Guest rights.
+  # unauthenticated rights, NOT as the user "Guest".
   my $bbs = new Net::ISCABBS(login=>"Bugcrusher", password=>"mypass");
  
   # Show the forums that you are a member of.  The hash key is the 
-  # forum number.  Doesn't work for Guest.
+  # forum number.  Doesn't work for unauthenticated users.
   my %forums = $bbs->forums("joined");
 
   # Get the number for all joined forums with unread messages.
@@ -374,9 +372,9 @@ A developer's interface to ISCABBS was opened in September 2004.  This module al
 
 =item $bbs = new Net::ISCABBS(host=>"bbs.isca.uiowa.edu", port=>"6145", login=>"Bugcrusher", password=>"mypass");
 
-This creates a new BBS object with the supplied parameters.  All are optional - if you leave off the host and port, the defaults shown above will be used.  If you do not supply the username and the password, you will be authenticated with "Guest" access.  That will disable a couple of methods involving joined forums, though, since Guest cannot join forums.
+This creates a new BBS object with the supplied parameters.  All are optional - if you leave off the host and port, the defaults shown above will be used.  If you do not supply the username and the password, you will gain access as an unauthenticated user (NOT the ISCABBS "Guest" account).  That will disable a couple of methods involving joined forums, though, since you have to be authenticated to join some forums.
 
-If there is a socket problem or the username and password you supply will not work, a croak() is triggered.
+If there is a socket problem or the username and password you supply will not work, the function returns 0.
 
 =item %forums = $bbs->forums(TYPE);
 
@@ -430,7 +428,7 @@ $unread{$forum_number}->{firstnote} - The numeric message ID of the oldest messa
 
 $unread{$forum_number}->{lastnote} - The numeric message ID of the newest message in the forum.
 
-This method does not work if you are logged in as Guest.
+This method does not work if you are unauthenticated.
 
 =item my $fi = $bbs->get_fi;
 

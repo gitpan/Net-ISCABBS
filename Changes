@@ -1,5 +1,9 @@
 Revision history for Perl extension Net::ISCABBS.
 
+0.51  Fri Dec  3 17:00:00 2004
+        - Changed the croak calls in the modules to "return 0" in order to let
+          the client code handle failures in their own way.
+
 0.5   Sun Oct 31 13:50:00 2004
         - Fixed bug that was causing incorrect date parsing in some forums.
         - Added access to the XHDR ALL command to get information about all
