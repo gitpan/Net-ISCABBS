@@ -1,8 +1,11 @@
-Net::ISCABBS version 0.1
+Net::ISCABBS 
 ========================
 
 This is a Perl version of the developer's interaface to ISCABBS at the
 University of Iowa.  See the POD/manpages for more information.
+
+========================
+ABOUT ISCABBS
 
 Established in 1989, ISCABBS has provided a virtual community for students 
 of the University of Iowa and the Internet in general. Today ISCABBS is the 

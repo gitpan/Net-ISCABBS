@@ -1,10 +1,11 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Net-ISCABBS
-version:      0.3
+version:      0.4
 version_from: ISCABBS.pm
 installdirs:  site
 requires:
+    Carp:                          0
     IO::Socket::INET:              0
 
 distribution_type: module

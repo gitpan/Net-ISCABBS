@@ -1,10 +1,11 @@
 package Net::ISCABBS;
-$VERSION = 0.3;
+$VERSION = 0.4;
 require IO::Socket::INET;
+use Carp;
 use strict;
 use warnings;
 
-# Subversion ID $Id: ISCABBS.pm 24 2004-09-28 17:48:21Z minter $
+# Subversion ID $Id: ISCABBS.pm 28 2004-10-05 18:29:19Z minter $
 
 sub new
 {
@@ -22,10 +23,10 @@ sub new
         Proto    => "tcp",
         Type     => IO::Socket::INET::SOCK_STREAM()
       )
-      or die "Cannot connect to $host:$port: $!\n";
+      or croak "Cannot connect to $host:$port: $!\n";
 
     my $welcome = <$socket>;
-    die "Server returned weird status: $welcome\n"
+    croak "Server returned weird status: $welcome\n"
       unless ( $welcome =~ /^2/ );
 
     if ( $login && $password )
@@ -38,7 +39,7 @@ sub new
         }
         else
         {
-            die "Could not log in.  Server returned $answer\n";
+            croak "Could not log in.  Server returned $answer\n";
         }
     }
 
@@ -65,8 +66,6 @@ sub forums
         {
             chomp($line);
 
-            # BUG: Need to handle the lobby (topic 0) properly
-            next if ( $line =~ /^topic:0/ );
             last if ( $line =~ /^\.$/ );
             my @tuples = split( /\t/, $line );
             my %topichash;
@@ -85,7 +84,7 @@ sub forums
 sub jump
 {
     my $self  = shift;
-    my $forum = shift or return 0;
+    my $forum = $_[0];
 
     my $socket = $self->{_socket};
 
@@ -200,7 +199,7 @@ sub set_firstunread
 {
     my $self      = shift;
     my $socket    = $self->{_socket};
-    my $messageid = shift or die;
+    my $messageid = shift or croak;
 
     if (   ( $messageid >= $self->{_firstnote} )
         && ( $messageid <= $self->{_lastnote} ) )
@@ -267,7 +266,7 @@ sub logout
 {
     my $socket = $_[0]->{_socket};
     print $socket "QUIT\n";
-    $socket->close() or die "Could not close socket\n";
+    $socket->close() or croak "Could not close socket\n";
 }
 
 1;
@@ -341,7 +340,7 @@ A developer's interface to ISCABBS was opened in September 2004.  This module al
 
 This creates a new BBS object with the supplied parameters.  All are optional - if you leave off the host and port, the defaults shown above will be used.  If you do not supply the username and the password, you will be authenticated with "Guest" access.  That will disable a couple of methods involving joined forums, though, since Guest cannot join forums.
 
-If there is a socket problem or the username and password you supply will not work, a die() is triggered.
+If there is a socket problem or the username and password you supply will not work, a croak() is triggered.
 
 =item %forums = $bbs->forums(TYPE);
 
