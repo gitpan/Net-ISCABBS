@@ -1,11 +1,11 @@
 package Net::ISCABBS;
-$VERSION = 0.4;
+$VERSION = 0.5;
 require IO::Socket::INET;
 use Carp;
 use strict;
 use warnings;
 
-# Subversion ID $Id: ISCABBS.pm 28 2004-10-05 18:29:19Z minter $
+# Subversion ID $Id: ISCABBS.pm 35 2004-10-31 19:43:14Z minter $
 
 sub new
 {
@@ -154,25 +154,21 @@ sub read
         chomp( my $response = <$socket> );
         if ( $response =~ /^3/ )
         {
-            my $message = {};
-            $response =~ s/^.*?\t//;
-            my @tuples = split( /\t/, $response );
-            foreach my $pair (@tuples)
+            my %message;
+            while (1)
             {
-                my ( $key, $value ) = split( /:/, $pair );
-                $message->{$key} = $value;
+
+                # Get header info until we hit a blank line
+                chomp( my $headerline = <$socket> );
+                last if ( $headerline =~ /^$/ );
+                my ( $key, $value ) = split( /:\s+/, $headerline );
+                $key = lc($key);
+                $key = "author" if ( $key eq "from" );
+                next if ( $key eq "formal-name" );
+                $message{$key} = $value;
             }
 
             my @lines;
-            chomp( $response = <$socket> );
-            $response =~ /^From: ([\w -<>]+)$/;
-            my $author = $1;
-            chomp( $response = <$socket> )
-              unless ( $author =~ /-- anonymous --/ );
-            chomp( $response = <$socket> );
-            $response =~ /^Date: (.*)$/;
-            my $date = $1;
-            chomp( $response = <$socket> );
 
             while ( chomp( $response = <$socket> ) )
             {
@@ -181,11 +177,11 @@ sub read
             }
             my $body = join( "\n", @lines );
 
-            $message = { author => $author, date => $date, body => $body };
+            $message{body} = $body;
             print $socket "SETRC $nextmessage\n";
             chomp( $response = <$socket> );
 
-            return $message;
+            return \%message;
         }
         else
         {
@@ -193,6 +189,46 @@ sub read
         }
     }
 
+}
+
+sub get_forum_headers
+{
+    my %xhdr;
+    my $self   = shift;
+    my $socket = $self->{_socket};
+    return 0 unless defined $self->{_forum};
+
+    print $socket "XHDR ALL\n";
+    my $result = <$socket>;
+    return 0 unless ( $result =~ /^3/ );
+
+    while ( my $noteinfo = <$socket> )
+    {
+        last if ( $noteinfo =~ /^\./ );
+        my $notenum;
+        my %tmphash;
+        chomp($noteinfo);
+        my @tuples = split( /\t/, $noteinfo );
+        foreach my $tuple (@tuples)
+        {
+            my ( $key, $value ) = split( /:/, $tuple );
+            if ( $key eq "noteno" )
+            {
+                $notenum = $value;
+            }
+            elsif ( $key eq "formal-author" )
+            {
+                my ( undef, $author, undef ) = split( /\//, $value );
+                $tmphash{author} = $author;
+            }
+            else
+            {
+                $tmphash{$key} = $value;
+            }
+        }
+        $xhdr{$notenum} = \%tmphash;
+    }
+    return %xhdr;
 }
 
 sub set_firstunread
@@ -362,7 +398,7 @@ Switches your active forum to the one specified.  You can either jump based on f
 
 Returns a hash reference that contains some or all the following keys:
 
-$forum->{forum} - The forum number
+$forum->{topic} - The forum number
 
 $forum->{name} - The ASCII name of the forum
 
@@ -371,6 +407,16 @@ $forum->{lastnote} - The numeric message ID of the newest message in the forum.
 $forum->{firstnote} - The numeric message ID of the oldest message in the forum.
 
 $forum->{admin} - The ISCA username of the forum moderator.
+
+=item my %headers = $bbs->get_forum_headers;
+
+Returns a hash, where the keys are the post numbers and the value is a hash reference containing the following information:
+
+$headers{$postnum}->{author} - The ISCABBS username of the author
+
+$headers{$postnum}->{date} - The posting date
+
+$headers{$postnum}->{subject} - A simple subject for the post, taken from the first few words.
 
 =item my %unread = $bbs->forums_with_unread;
 
@@ -432,8 +478,6 @@ Sends a QUIT to the BBS and closes the TCP socket
 =head1 BUGS
 
 Currently the module works in read-only mode.  Posting and deleting are not yet working.
-
-The module has problems with the Lobby> (Forum ID 0) and Mail> (Forum ID 1)
 
 This is my first Perl module, so there are probably many things that could be done better.   Patches welcome!
 
