@@ -1,10 +1,10 @@
 package Net::ISCABBS;
-$VERSION = 0.53;
+$VERSION = "1.0";
 require IO::Socket::INET;
 use strict;
 use warnings;
 
-# Subversion ID $Id: ISCABBS.pm 49 2005-02-14 17:44:50Z minter $
+# Subversion ID $Id: ISCABBS.pm 56 2005-02-15 21:42:03Z minter $
 
 sub new
 {
@@ -25,7 +25,11 @@ sub new
       or return;
 
     my $welcome = <$socket>;
-    return unless ( $welcome =~ /^2/ );
+    if ( $welcome !~ /^2/ )
+    {
+        $@ = "Server connection failed with response $welcome";
+        return;
+    }
 
     if ( $login && $password )
     {
@@ -37,6 +41,7 @@ sub new
         }
         else
         {
+            $@ = "LOGIN command failed with response $answer";
             return;
         }
     }
@@ -75,8 +80,13 @@ sub forums
             my $topicid = $topichash{topic};
             $forums{$topicid} = \%topichash;
         }
+        return %forums;
     }
-    return %forums;
+    else
+    {
+        $@ = "Topic listing failed with response $status";
+        return;
+    }
 }
 
 sub jump
@@ -114,6 +124,7 @@ sub jump
     }
     else
     {
+        $@ = "Jump to forum $forum died with error $response";
         return;
     }
 }
@@ -131,6 +142,7 @@ sub get_first_unread
     }
     else
     {
+        $@ = "SHOW rcval failed with response $response";
         return;
     }
 
@@ -143,7 +155,7 @@ sub read
     my $start  = shift || $self->get_first_unread;
     if ( $start > $self->{_lastnote} )
     {
-        return undef;
+        return;
     }
     else
     {
@@ -183,6 +195,7 @@ sub read
         }
         else
         {
+            $@ = "Read of $start failed with response $response";
             return;
         }
     }
@@ -198,14 +211,21 @@ sub get_forum_noteids
 
     print $socket "XHDR\n";
     my $result = <$socket>;
-    return unless ( $result =~ /^3/ );
-    while ( my $noteinfo = <$socket> )
+    if ( $result =~ /^3/ )
     {
-        last if ( $noteinfo =~ /^\./ );
-        push( @noteids, $1 ) if ( $noteinfo =~ /^noteno:(\d+)/ );
-    }
+        while ( my $noteinfo = <$socket> )
+        {
+            last if ( $noteinfo =~ /^\./ );
+            push( @noteids, $1 ) if ( $noteinfo =~ /^noteno:(\d+)/ );
+        }
 
-    return @noteids;
+        return @noteids;
+    }
+    else
+    {
+        $@ = "XHDR failed with response $result";
+        return;
+    }
 }
 
 sub get_forum_headers
@@ -218,35 +238,91 @@ sub get_forum_headers
 
     print $socket "XHDR ALL $range\n";
     my $result = <$socket>;
-    return unless ( $result =~ /^3/ );
-
-    while ( my $noteinfo = <$socket> )
+    if ( $result =~ /^3/ )
     {
-        last if ( $noteinfo =~ /^\./ );
-        my $notenum;
-        my %tmphash;
-        chomp($noteinfo);
-        my @tuples = split( /\t/, $noteinfo );
-        foreach my $tuple (@tuples)
+        while ( my $noteinfo = <$socket> )
         {
-            my ( $key, $value ) = split( /:/, $tuple );
-            if ( $key eq "noteno" )
+            last if ( $noteinfo =~ /^\./ );
+            my $notenum;
+            my %tmphash;
+            chomp($noteinfo);
+            my @tuples = split( /\t/, $noteinfo );
+            foreach my $tuple (@tuples)
             {
-                $notenum = $value;
+                my ( $key, $value ) = split( /:/, $tuple );
+                if ( $key eq "noteno" )
+                {
+                    $notenum = $value;
+                }
+                elsif ( $key eq "formal-author" )
+                {
+                    my ( undef, $author, undef ) = split( /\//, $value );
+                    $tmphash{author} = $author;
+                }
+                else
+                {
+                    $tmphash{$key} = $value;
+                }
             }
-            elsif ( $key eq "formal-author" )
-            {
-                my ( undef, $author, undef ) = split( /\//, $value );
-                $tmphash{author} = $author;
-            }
-            else
-            {
-                $tmphash{$key} = $value;
-            }
+            $xhdr{$notenum} = \%tmphash;
         }
-        $xhdr{$notenum} = \%tmphash;
+        return %xhdr;
     }
-    return %xhdr;
+    else
+    {
+        $@ = "XHDR ALL failed with response $result";
+        return;
+    }
+}
+
+sub post
+{
+    my $self    = shift;
+    my $message = shift or return;
+    my $socket  = $self->{_socket};
+    return unless defined $self->{_forum};
+
+    print $socket "POST\n";
+    chomp( my $post_resp = <$socket> );
+    if ( $post_resp !~ /^3/ )
+    {
+        $@ = "POST command failed with response $post_resp";
+        return;
+    }
+
+    print $socket "$message\n";
+    print $socket ".\n";
+    chomp( my $data_resp = <$socket> );
+    if ( $data_resp =~ /^2.*: (\d+)/ )
+    {
+        return $1;
+    }
+    else
+    {
+        $@ = "POST data failed with response $data_resp";
+        return;
+    }
+}
+
+sub delete
+{
+    my $self   = shift;
+    my $postid = shift or return;
+    my $socket = $self->{_socket};
+    return unless defined $self->{_forum};
+
+    print $socket "DELETE NOTE $postid\n";
+    chomp( my $delete_resp = <$socket> );
+
+    if ( $delete_resp =~ /^2/ )
+    {
+        return 1;
+    }
+    else
+    {
+        $@ = "Deletion of note $postid failed with response $delete_resp";
+        return;
+    }
 }
 
 sub set_firstunread
@@ -297,23 +373,50 @@ sub get_fi
     my $socket = $self->{_socket};
     print $socket "SHOW info\n";
     my $result = <$socket>;
-    return unless ( $result =~ /^3/ );
-    chomp( my $fromline = <$socket> );
-    my $author = $1 if ( $fromline =~ /From: (.*)/ );
-    chomp( my $dateline = <$socket> );
-    my $date      = $1 if ( $dateline =~ /Date: (.*)/ );
-    my $blankline = <$socket>;
-
-    my @lines;
-
-    while ( chomp( my $line = <$socket> ) )
+    if ( $result =~ /^3/ )
     {
-        last if ( $line =~ /^\.$/ );
-        push( @lines, $line );
+        chomp( my $fromline = <$socket> );
+        my $author = $1 if ( $fromline =~ /From: (.*)/ );
+        chomp( my $dateline = <$socket> );
+        my $date      = $1 if ( $dateline =~ /Date: (.*)/ );
+        my $blankline = <$socket>;
+
+        my @lines;
+
+        while ( chomp( my $line = <$socket> ) )
+        {
+            last if ( $line =~ /^\.$/ );
+            push( @lines, $line );
+        }
+        my $body = join( "\n", @lines );
+        my $fi = { fi_author => $author, last_updated => $date, body => $body };
+        return $fi;
     }
-    my $body = join( "\n", @lines );
-    my $fi = { fi_author => $author, last_updated => $date, body => $body };
-    return $fi;
+    else
+    {
+        $@ = "SHOW INFO failed with response $result";
+        return;
+    }
+}
+
+sub can_post
+{
+    my $self    = shift;
+    my $message = shift or return;
+    my $socket  = $self->{_socket};
+    return unless defined $self->{_forum};
+
+    print $socket "OKAY POST\n";
+    chomp( my $result = <$socket> );
+    if ( $result =~ /^2/ )
+    {
+        return 1;
+    }
+    else
+    {
+        $@ = "OKAY POST failed with the following response: $result";
+        return;
+    }
 }
 
 sub logout
@@ -371,6 +474,17 @@ Net::ISCABBS - Perl interface to the ISCABBS system
     print "$message->{body}\n";
   }
 
+  # Post a message to Babble
+  $bbs->jump(3);
+  if ($bbs->can_post)
+  {
+      $bbs->post("I have something very insightful to say") or die;
+  }
+  else
+  {
+      print "You don't have permission to post here\n";
+  }
+
   # Log out
   $bbs->logout;
 
@@ -384,7 +498,9 @@ ISCABBS offers Intra-BBS electronic mail and real-time instant messages between 
 
 ISCABBS is owned and maintained by the Iowa Student Computer Association at the University of Iowa in Iowa City, Iowa. This student group meets monthly during the school year and supports several projects.
 
-A developer's interface to ISCABBS was opened in September 2004.  This module allows Perl coders to access that interface.
+A developer's interface to ISCABBS (raccdoc) was opened in September 2004.  This module allows Perl coders to access that interface.
+
+Most methods below return undef on failure and set $@, except when they don't.
 
 =head1 METHODS
 
@@ -394,7 +510,7 @@ A developer's interface to ISCABBS was opened in September 2004.  This module al
 
 This creates a new BBS object with the supplied parameters.  All are optional - if you leave off the host and port, the defaults shown above will be used.  If you do not supply the username and the password, you will gain access as an unauthenticated user (NOT the ISCABBS "Guest" account).  That will disable a couple of methods involving joined forums, though, since you have to be authenticated to join some forums.
 
-If there is a socket problem or the username and password you supply will not work, the function returns 0.
+Returns the object on success, returns undef and sets $@ on failure.
 
 =item %forums = $bbs->forums(TYPE);
 
@@ -425,6 +541,14 @@ $forum->{lastnote} - The numeric message ID of the newest message in the forum.
 $forum->{firstnote} - The numeric message ID of the oldest message in the forum.
 
 $forum->{admin} - The ISCA username of the forum moderator.
+
+=item my $result = $bbs->can_post;
+
+Tests to see whether the current user is able to write in the current forum.  Returns true if the user can write, undef if they cannot.  This is a useful method if you want to provide different interfaces depending on whether or not the forum is writable.
+
+=item my $postid = $bbs->post($message);
+
+Posts the text in $message to your current forum.  Returns the post ID on success, undef on failure.  For obvious reasons, this method will probably fail if you are not logged into the BBS, as no forums allow guest posting.
 
 =item my @noteids = $bbs->get_forum_noteids;
 
@@ -470,6 +594,8 @@ $fi->{body} - The text of the forum information
 
 Gets the numeric message ID of the first message in your currently active forum that you have not read.
 
+Returns the message ID on success.
+
 =item my $message = $bbs->read($message_number);
 
 Returns a hashref containing the message in your currently active forum at ID $message_number or, if you do not specify one, your first unread message.
@@ -491,9 +617,13 @@ while (my $message = $bbs->read)
   print "$message->{body}\n";
 }
 
-=item $bbs->set_first_unread($messageid)
+=item $bbs->set_first_unread($messageid);
 
 Sets the flag for your first unread message to the number specified in $messageid.  Returns failure if the specified number is outside of the bounds of the first and last messages currently in the forum, success otherwise.
+
+=item $bbs->delete($postid);
+
+Deletes the post in your current forum specified by $postid.  Returns true on success.  Obviously, you must have permission to delete said post.
 
 =item $bbs->logout;
 
@@ -511,7 +641,7 @@ ISCABBS Website: L<http://www.iscabbs.com/>
 
 Telnet to bbs.isca.uiowa.edu to participate in ISCABBS.
 
-For more information on the programmer's interface, post in the The Future Of ISCA BBS> forum on ISCA.
+For more information on the raccdoc interface, post in the The Future Of ISCA BBS> forum on ISCA.
 
 =head1 AUTHOR
 

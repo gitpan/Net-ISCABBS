@@ -1,5 +1,13 @@
 Revision history for Perl extension Net::ISCABBS.
 
+1.0   Tue Feb 15 16:31:00 2004
+        - Add a post method, to allow writing into forums.
+        - Add a delete method, to allow deletion of posts.
+        - Add a can_write method, to check whether or not you have write permission
+          in the current forum.
+        - Set $@ on most failures to provide more error details.
+        - Bump version from 0.53 to 1.0, since we now have write ability.
+
 0.53  Mon Feb 14 12:36:00 2004
         - Return "undef" instead of "0" when things fail.
         - Add a new method, get_forum_noteids, which does an "XHDR" on the backend and
