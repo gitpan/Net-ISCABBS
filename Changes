@@ -1,0 +1,18 @@
+Revision history for Perl extension Net::ISCABBS.
+
+0.3   Tue Sep 27 15:55:00 2004
+        - Use the Forum Moderator information, as well as the "todo" count of
+          unread messages, new as of today.
+
+0.2   Mon Sep 27 15:55:00 2004
+        - Based on Tanj's advice, only check the first digit of status codes,
+          as well as reworking the code to accept key:value pairs in any 
+          order.
+        - Change the lastmessage/firstmessage hash keys to lastnote/firstnote,
+          since that is how the system returns them and it's easier to 
+          program that way.
+
+0.1   Sun Sep 26 14:28:02 2004
+	- original version; created by h2xs 1.22 with options
+		-AX Net::ISCABBS
+
