@@ -1,5 +1,11 @@
 Revision history for Perl extension Net::ISCABBS.
 
+0.53  Mon Feb 14 12:36:00 2004
+        - Return "undef" instead of "0" when things fail.
+        - Add a new method, get_forum_noteids, which does an "XHDR" on the backend and
+          returns just the note ids in a forum, vs. the more expensive "XHDR ALL"
+          that get_forum_headers performs.  The latter returns more information, though.
+
 0.52  Wed Dec 28 17:00:00 2004
         - Require Perl 5.005 or higher, instead of Perl 5.8.1 or higher.
           Thanks to Mystic One for pointing out the error.

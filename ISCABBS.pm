@@ -1,10 +1,10 @@
 package Net::ISCABBS;
-$VERSION = 0.52;
+$VERSION = 0.53;
 require IO::Socket::INET;
 use strict;
 use warnings;
 
-# Subversion ID $Id: ISCABBS.pm 41 2004-12-30 01:35:11Z minter $
+# Subversion ID $Id: ISCABBS.pm 49 2005-02-14 17:44:50Z minter $
 
 sub new
 {
@@ -22,10 +22,10 @@ sub new
         Proto    => "tcp",
         Type     => IO::Socket::INET::SOCK_STREAM()
       )
-      or return 0;
+      or return;
 
     my $welcome = <$socket>;
-    return 0 unless ( $welcome =~ /^2/ );
+    return unless ( $welcome =~ /^2/ );
 
     if ( $login && $password )
     {
@@ -37,7 +37,7 @@ sub new
         }
         else
         {
-            return 0;
+            return;
         }
     }
 
@@ -114,7 +114,7 @@ sub jump
     }
     else
     {
-        return 0;
+        return;
     }
 }
 
@@ -131,7 +131,7 @@ sub get_first_unread
     }
     else
     {
-        return 0;
+        return;
     }
 
 }
@@ -183,22 +183,42 @@ sub read
         }
         else
         {
-            return 0;
+            return;
         }
     }
 
+}
+
+sub get_forum_noteids
+{
+    my @noteids;
+    my $self   = shift;
+    my $socket = $self->{_socket};
+    return unless defined $self->{_forum};
+
+    print $socket "XHDR\n";
+    my $result = <$socket>;
+    return unless ( $result =~ /^3/ );
+    while ( my $noteinfo = <$socket> )
+    {
+        last if ( $noteinfo =~ /^\./ );
+        push( @noteids, $1 ) if ( $noteinfo =~ /^noteno:(\d+)/ );
+    }
+
+    return @noteids;
 }
 
 sub get_forum_headers
 {
     my %xhdr;
     my $self   = shift;
+    my $range  = shift || "";
     my $socket = $self->{_socket};
-    return 0 unless defined $self->{_forum};
+    return unless defined $self->{_forum};
 
-    print $socket "XHDR ALL\n";
+    print $socket "XHDR ALL $range\n";
     my $result = <$socket>;
-    return 0 unless ( $result =~ /^3/ );
+    return unless ( $result =~ /^3/ );
 
     while ( my $noteinfo = <$socket> )
     {
@@ -233,7 +253,7 @@ sub set_firstunread
 {
     my $self      = shift;
     my $socket    = $self->{_socket};
-    my $messageid = shift or return 0;
+    my $messageid = shift or return;
 
     if (   ( $messageid >= $self->{_firstnote} )
         && ( $messageid <= $self->{_lastnote} ) )
@@ -243,7 +263,7 @@ sub set_firstunread
     }
     else
     {
-        return 0;
+        return;
     }
 }
 
@@ -254,7 +274,7 @@ sub forums_with_unread
     my %unread;
     if ( !$self->{_loggedin} )
     {
-        return 0;
+        return;
     }
     my %forums = $self->forums("todo");
     foreach my $key ( sort keys %forums )
@@ -277,7 +297,7 @@ sub get_fi
     my $socket = $self->{_socket};
     print $socket "SHOW info\n";
     my $result = <$socket>;
-    return 0 unless ( $result =~ /^3/ );
+    return unless ( $result =~ /^3/ );
     chomp( my $fromline = <$socket> );
     my $author = $1 if ( $fromline =~ /From: (.*)/ );
     chomp( my $dateline = <$socket> );
@@ -300,7 +320,7 @@ sub logout
 {
     my $socket = $_[0]->{_socket};
     print $socket "QUIT\n";
-    $socket->close() or return 0;
+    $socket->close() or return;
 }
 
 1;
@@ -406,15 +426,21 @@ $forum->{firstnote} - The numeric message ID of the oldest message in the forum.
 
 $forum->{admin} - The ISCA username of the forum moderator.
 
-=item my %headers = $bbs->get_forum_headers;
+=item my @noteids = $bbs->get_forum_noteids;
 
-Returns a hash, where the keys are the post numbers and the value is a hash reference containing the following information:
+Performs an "XHDR" in your current forum, and returns an array of all post numbers in the forum.  This is a less intensive operation than the "XHDR ALL" performed by get_forum_headers, so it should be used when you don't need the full post information.
+
+=item my %headers = $bbs->get_forum_headers($rangestring);
+
+Performs an "XHDR ALL" and returns a hash, where the keys are the post numbers and the value is a hash reference containing the following information:
 
 $headers{$postnum}->{author} - The ISCABBS username of the author
 
 $headers{$postnum}->{date} - The posting date
 
 $headers{$postnum}->{subject} - A simple subject for the post, taken from the first few words.
+
+The optional $rangestring gives the range of posts to get information about.  It can be a single post ID ("31773") or a max-min range ("31770-31779").  If the $rangestring exists, only headers for the requested posts will be returned.  Otherwise, all posts in a forum will be returned.
 
 =item my %unread = $bbs->forums_with_unread;
 
