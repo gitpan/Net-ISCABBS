@@ -1,10 +1,10 @@
 package Net::ISCABBS;
-$VERSION = 0.51;
+$VERSION = 0.52;
 require IO::Socket::INET;
 use strict;
 use warnings;
 
-# Subversion ID $Id: ISCABBS.pm 40 2004-12-03 22:26:34Z minter $
+# Subversion ID $Id: ISCABBS.pm 41 2004-12-30 01:35:11Z minter $
 
 sub new
 {
