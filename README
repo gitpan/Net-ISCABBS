@@ -1,7 +1,7 @@
 Net::ISCABBS 
 ========================
 
-This is a Perl version of the developer's interaface to ISCABBS at the
+This is a Perl version of the raccdoc interface to ISCABBS at the
 University of Iowa.  See the POD/manpages for more information.
 
 ========================

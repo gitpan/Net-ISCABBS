@@ -1,10 +1,10 @@
 package Net::ISCABBS;
-$VERSION = "1.0";
+$VERSION = "1.1";
 require IO::Socket::INET;
 use strict;
 use warnings;
 
-# Subversion ID $Id: ISCABBS.pm 56 2005-02-15 21:42:03Z minter $
+# Subversion ID $Id: ISCABBS.pm 58 2005-02-20 01:56:00Z minter $
 
 sub new
 {
@@ -188,8 +188,6 @@ sub read
             my $body = join( "\n", @lines );
 
             $message{body} = $body;
-            print $socket "SETRC $nextmessage\n";
-            chomp( $response = <$socket> );
 
             return \%message;
         }
@@ -207,7 +205,11 @@ sub get_forum_noteids
     my @noteids;
     my $self   = shift;
     my $socket = $self->{_socket};
-    return unless defined $self->{_forum};
+    unless ( defined $self->{_forum} )
+    {
+        $@ = "Forum not defined";
+        return;
+    }
 
     print $socket "XHDR\n";
     my $result = <$socket>;
@@ -325,7 +327,7 @@ sub delete
     }
 }
 
-sub set_firstunread
+sub set_first_unread
 {
     my $self      = shift;
     my $socket    = $self->{_socket};
@@ -335,6 +337,7 @@ sub set_firstunread
         && ( $messageid <= $self->{_lastnote} ) )
     {
         print $socket "SETRC $messageid\n";
+        my $trash = <$socket>;
         return 1;
     }
     else
@@ -608,7 +611,7 @@ $message->{date} - The date the post was made.
 
 $message->{body} - The body of the post.
 
-The $bbs->read method increments your "last read" counter, so that you can read all unread messages with the following loop:
+The $bbs->read method (as of 1.1) does NOT increment your "last read" counter, so you will need to call ->set_first_unread($postid) when you are done reading.
 
 while (my $message = $bbs->read)
 {
@@ -616,6 +619,7 @@ while (my $message = $bbs->read)
   print "Date: $message->{date}\n";
   print "$message->{body}\n";
 }
+$bbs->set_first_unread($last_postid);
 
 =item $bbs->set_first_unread($messageid);
 
