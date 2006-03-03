@@ -17,7 +17,7 @@ ok( $lobby = $bbs->jump(0) );         # Everyone should be able to jump
                                       # to the lobby.
 ok( $lobby->{lastnote} > 0 );         # The newest post in the lobby
                                       # should have a reasonable number
-ok( my $post = $bbs->read( $lobby->{lastnote} ) );
+ok( my $post = $bbs->read( message => $lobby->{lastnote} ) );
 
 # Read the newest Lobby> post
 

@@ -1,5 +1,10 @@
 Revision history for Perl extension Net::ISCABBS.
 
+1.2   Fri Mar  3 11:23:00 2006
+        - Updating with bugfixes long neglected.
+        - Adding the DAMMIT method to read anonymous posts.  Note the change
+          in the ->read method.
+
 1.1   Sat Feb 19 15:48:00 2005
         - Fix a typo in the set_first_unread method.
         - Don't do a SETRC after each ->read() - you'll need to do it

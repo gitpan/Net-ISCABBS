@@ -1,10 +1,11 @@
 package Net::ISCABBS;
-$VERSION = "1.1";
+$VERSION = "1.2";
 require IO::Socket::INET;
 use strict;
 use warnings;
+use Carp;
 
-# Subversion ID $Id: ISCABBS.pm 58 2005-02-20 01:56:00Z minter $
+# Subversion ID $Id: ISCABBS.pm 71 2006-03-03 16:25:58Z minter $
 
 sub new
 {
@@ -150,17 +151,25 @@ sub get_first_unread
 
 sub read
 {
-    my $self   = shift;
+    my ( $self, %options ) = @_;
     my $socket = $self->{_socket};
-    my $start  = shift || $self->get_first_unread;
-    if ( $start > $self->{_lastnote} )
+    my $message  = $options{message} || $self->get_first_unread;
+    my $dammit = $options{dammit} || 0;
+    if ( $message > $self->{_lastnote} )
     {
         return;
     }
     else
     {
-        my $nextmessage = $start + 1;
-        print $socket "READ $start\n";
+        my $nextmessage = $message + 1;
+        if ($dammit)
+        {
+            print $socket "READ $message DAMMIT\n";
+        }
+        else
+        {
+            print $socket "READ $message\n";
+        }
         chomp( my $response = <$socket> );
         if ( $response =~ /^3/ )
         {
@@ -193,7 +202,7 @@ sub read
         }
         else
         {
-            $@ = "Read of $start failed with response $response";
+            $@ = "Read of $message failed with response $response";
             return;
         }
     }
@@ -251,7 +260,17 @@ sub get_forum_headers
             my @tuples = split( /\t/, $noteinfo );
             foreach my $tuple (@tuples)
             {
-                my ( $key, $value ) = split( /:/, $tuple );
+                my $key;
+                my $value;
+                if ( $tuple =~ /^(.*?):(.*)$/ )
+                {
+                    $key   = $1;
+                    $value = $2;
+                }
+                else
+                {
+                    next;
+                }
                 if ( $key eq "noteno" )
                 {
                     $notenum = $value;
@@ -295,8 +314,9 @@ sub post
     print $socket "$message\n";
     print $socket ".\n";
     chomp( my $data_resp = <$socket> );
-    if ( $data_resp =~ /^2.*: (\d+)/ )
+    if ( $data_resp =~ /^2/ ) 
     {
+        $data_resp =~ / .*?(\d+)/;
         return $1;
     }
     else
@@ -334,11 +354,19 @@ sub set_first_unread
     my $messageid = shift or return;
 
     if (   ( $messageid >= $self->{_firstnote} )
-        && ( $messageid <= $self->{_lastnote} ) )
+        && ( $messageid <= ( $self->{_lastnote} + 1 ) ) )
     {
         print $socket "SETRC $messageid\n";
-        my $trash = <$socket>;
-        return 1;
+        my $response = <$socket>;
+        if ( $response =~ /^2/ )
+        {
+            return 1;
+        }
+        else
+        {
+            $@ = "SETRC returned bad status: $response";
+            return;
+        }
     }
     else
     {
@@ -404,9 +432,8 @@ sub get_fi
 
 sub can_post
 {
-    my $self    = shift;
-    my $message = shift or return;
-    my $socket  = $self->{_socket};
+    my $self   = shift;
+    my $socket = $self->{_socket};
     return unless defined $self->{_forum};
 
     print $socket "OKAY POST\n";
@@ -420,6 +447,13 @@ sub can_post
         $@ = "OKAY POST failed with the following response: $result";
         return;
     }
+}
+
+sub xmsg_add
+{
+    my $self   = shift;
+    my $socket = $self->{_socket};
+
 }
 
 sub logout
@@ -599,9 +633,9 @@ Gets the numeric message ID of the first message in your currently active forum 
 
 Returns the message ID on success.
 
-=item my $message = $bbs->read($message_number);
+=item my $message = $bbs->read(message => $message_number, dammit => 1);
 
-Returns a hashref containing the message in your currently active forum at ID $message_number or, if you do not specify one, your first unread message.
+Returns a hashref containing the message in your currently active forum.  Arguments are a hash - if you provide the "message" argument, you will start reading from there.  Otherwise, your first unread message is used.  If the "dammit" option is true, and you have the proper forum permissions (FM or Sysop), you can get the author of an anonymous post.
 
 The hashref contains the following fields:
 
